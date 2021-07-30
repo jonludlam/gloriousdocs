@@ -1,0 +1,150 @@
+<!doctype html>
+<html>
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
+		<title>reveal.js</title>
+
+		<link rel="stylesheet" href="dist/reset.css">
+		<link rel="stylesheet" href="dist/reveal.css">
+		<link rel="stylesheet" href="dist/theme/black.css">
+
+		<!-- Theme used for syntax highlighted code -->
+		<link rel="stylesheet" href="plugin/highlight/monokai.css">
+	</head>
+	<body>
+		<div class="reveal">
+			<div class="slides">
+				<section>
+					<h3>A Multiverse of Glorious Documentation</h3>
+					<br>
+					<span>Lucas Pluvinage, Tarides</span>,<br>
+					<span>Jon Ludlam, University of Cambridge</span>
+					<aside class="notes">
+						Hello. My name is Jon Ludlam, and I'll be giving our talk entitled
+						"A Multiverse of Glorious Documentation". Those of you that were here
+						last year may remember I gave a talk about `odoc` entitled 'The Final
+						Piece of the Documentation Puzzle'. Now, the astute amongst you might notice
+						I'm back with more documentation work so you might thing perhaps last's year's title
+						was a little premature. The difference this year however, is that I want to expand our scope.
+						We weren't ambitious enough last year -- I looked only at documenting a single library. This year I want
+						to document every single library I've ever seen, and all the libraries that I've never
+						seen too. And I'm going to tell you how to combine all those library documents
+						into not just a glorious universe of documents, but an entire multiverse! Let's go!
+					</aside>
+				</section>
+
+				<section>
+					<h3>Goals</h3>
+					<ul>
+						<li>To produce correct, cross-referenced documentation for <strong><em>all</em></strong> versions of <strong><em>all</em></strong> packages</li>
+						<li>To ensure this is automated, incremental, low latency and repeatable</li>
+						<li>Provide a solid basis for further innovation, e.g. links to/from source, type-aware search, etc.</li>
+					</ul>
+					<aside class="notes">
+						Let's start with the goals. We're looking at the opam repository, and wanting to
+						produce documentation for each of the versions of each of the packages in there.
+						That amounts to about 17,400 version as of today - a lot of packages to be sure, but not insurmountable.
+						An fact, we actually end up document a bit more than that, and I'll discuss the reasons why this is the case in a bit.
+
+						Additionally, we'd really like this to be an automated process, so we can just let 
+					    it get on with things and not worry about it - I don't particular want to schedule
+						a weekly 'update the docs' slot into my Monday mornings. Even better, let's have it
+						such that any time a new package or version is merged into opam-repository.git
+						we'll build docs for that. While we're making up goals let's have it happy quickly,
+						let's aim for 10 minutes and see how we do. And if the server we're running it on
+						shuffles off to a better place, we need to be able to start it all up again without
+						too many tears.
+
+						OK, we know what we want. How do we do it?
+					</aside>
+				</section>
+
+				<section>
+					<h3>Odoc and HTML file placement</h3>
+					<ul>
+						<li>Use <a href="https://ocaml.github.io/odoc">odoc</a></li>
+						<li>Odoc requires consistent set of packages compiled together</li>
+						<li>Can’t have more than one version then!</li>
+						<li>Solution: build docs separately then ‘union’ them</li>
+						<li>Odoc 2.0 supports this</li>
+					</ul>
+					<aside class="notes">
+						No surprises given it's me talking -- we're going to use odoc. It's the only tool in
+						the game really. The trouble is that the way odoc works is that it requires a consistent
+						set of packages that are all co-installable; or more accurately co-typable. To understand
+						why see my talk from last year. So that rules out having more than one version of a package
+						... mostly.
+
+						What we're going to do then, is build the documents separately into some carefully defined
+						file tree, then 'union' them together into one set of docs.
+
+						Happily, Odoc 2.0 supports rendering HTML into an arbitrary file structure, so we're good
+						to go.
+
+						Next decision: File layout
+					</aside>
+				</section>
+
+				<section>
+					<h3>Universes</h3>
+					<ul>
+						<li>Could we simply use <pre><code class="language-shell">/packages/&lt;package name&gt;/&lt;package version&gt;/</code></pre></li>
+						<li>Doesn't specify precisely enough: A package interface depends upon the precise versions of its dependencies! Consider:</li>
+						<pre><code class="language-ocaml">
+module M : Stdlib.Set.S with type t = mytype
+						</code></pre>
+					</ul>
+					<aside class="notes">
+						The most obvious answer is just to stick the HTML docs into a file structure based on the package name and version.
+						Should be sufficient right? Wrong!
+						
+						The fact is that the interface exposed by a package is dependent not only on the package itself, but on the _exact versions_ of its dependencies.
+						
+						Consider, for example, a package that exposes a `Set` created from the functor in the standard library - specialised in this case that the type t is equal to "mytype".
+						In this signature, the function 'filter_map' has only been included since OCaml 4.11, so if you build this exact package against 4.10 it would not contain that value.
+						
+						Consequently in order for the cross-referencing to be exact and correct, we need to identify a particular set of docs for a package not just by the package name and version,
+						but by the triple of 'package name', 'package version' and 'universe id', the last of which we define as a hash dependent on the package's versioned dependencies.
+					</aside>
+				</section>
+
+			    <section>
+					<h3>Multiverse</h3>
+					<ul>
+					<li>Can we get away with a single universe per package?</li>
+					<li>No! Example: `findlib`</li>
+					</ul>
+					<aside class="notes">
+
+						Next question: Can we get away with only ever compiling each version of each package against one set of dependencies?
+						It would be convenient, but this turns out not to be the case. Take the example of `findlib` - virtually all packages depend upon findlib, and with no constraint, meaning opam will pick the latest compatible version. However, many packages have constraints on the version of OCaml, so we end up compiling the latest version of `findlib` against many different versions of the compiler.
+
+Consequently, for some packages, we necessarily need to produce documentation for the same version for each different universe in which it is needed.
+
+					</aside>
+				</section>
+
+
+
+			</div>
+		</div>
+
+		<script src="dist/reveal.js"></script>
+		<script src="plugin/notes/notes.js"></script>
+		<script src="plugin/markdown/markdown.js"></script>
+		<script src="plugin/highlight/highlight.js"></script>
+		<script>
+			// More info about initialization & config:
+			// - https://revealjs.com/initialization/
+			// - https://revealjs.com/config/
+			Reveal.initialize({
+				hash: true,
+
+				// Learn about plugins: https://revealjs.com/plugins/
+				plugins: [ RevealMarkdown, RevealHighlight, RevealNotes ]
+			});
+		</script>
+	</body>
+</html>
