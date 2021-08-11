@@ -23,12 +23,12 @@
 					<span>Jon Ludlam, University of Cambridge</span>
 					<aside class="notes">
 						Hello. My name is Jon Ludlam, and I'll be giving our talk entitled
-						"A Multiverse of Glorious Documentation". Those of you that were here
+						"A Multiverse of Glorious Documentation", written by Lucas Pluvinage and myself. Those of you that were here
 						last year may remember I gave a talk about `odoc` entitled 'The Final
 						Piece of the Documentation Puzzle'. Now, you might notice
 						I'm back with more documentation work so you might reasonably think perhaps last's year's title
-						was a little premature. The difference this year however, is that I want to expand our scope.
-						We weren't ambitious enough last year -- I looked only at documenting a single library. This year I want
+						was maybe a little premature. The difference this year however, is that I want to expand our scope.
+						We weren't ambitious enough last year -- we looked only at documenting a single library. This year I want
 						to document every single library I've ever seen, and all the libraries that I've never
 						seen too, and even every version of all of these libraries. And I'm going to tell you how to combine all those library documents
 						into not just a glorious universe of documents, but an entire multiverse! Let's go!
@@ -43,21 +43,21 @@
 						<li>Provide a solid basis for further innovation, e.g. links to/from source, type-aware search, etc.</li>
 					</ul>
 					<aside class="notes">
-						We'll start with the goals. We're looking at the opam repository, and wanting to
+						As usual we start with the goals. We're looking at the opam repository, and wanting to
 						produce documentation for each of the versions of each of the packages in there.
-						That amounts to about 17,400 version as of today - a lot of packages to be sure, but not insurmountable.
-						An fact, we actually end up document a bit more than that, and I'll discuss the reasons why this is the case in a bit.
+						That amounts to just short of 20,000 version as of today - a lot of packages to be sure, but not insurmountable.
+						In fact, we actually end up documenting a few more than that, and I'll discuss the reasons why this is the case in a bit.
 
 						Additionally, we'd really like this to be an automated process, so we can just let 
 					    it get on with things and not worry about it - I don't particular want to schedule
 						a weekly 'update the docs' slot into my Monday mornings. Even better, let's have it
 						such that any time a new package or version is merged into opam-repository.git
-						we'll build docs for that. While we're making up goals let's have it happen quickly,
+						we'll build docs for that. While we're at it, let's have it happen quickly,
 						let's aim for 10 minutes and see how we do. And if the server we're running it on
-						shuffles off to a better place, we need to be able to start it all up again without
+						dies a horrible death, we need to be able to start it all up again without
 						too many tears.
 
-						OK, we know what we want. How do we do it?
+						OK, so we know what we want. How are we going to do it?
 					</aside>
 				</section>
 
@@ -78,7 +78,7 @@
 						... in most cases at least.
 
 						What we're going to do then, is build the documents separately into some carefully defined
-						file tree, then 'union' them together into one set of docs.
+						file tree, then 'union' the trees together into one set of docs.
 
 						Happily, Odoc 2.0 supports rendering HTML into an arbitrary file structure, so we're good
 						to go.
@@ -98,12 +98,13 @@ module M : Stdlib.Set.S with type t = mytype
 					</ul>
 					<aside class="notes">
 						The most obvious answer is just to stick the HTML docs into a file structure based on the package name and version.
-						Should be sufficient right? Sadly this is not the case.
+						Is this sufficient? Sadly no it's not.
 						
 						The fact is that the interface exposed by a package is dependent not only on the package itself, but on the _exact versions_ of its dependencies.
 						
 						Consider, for example, a package that exposes a `Set` created from the functor in the standard library - specialised in this case that the type t is equal to "mytype".
 						In this signature, the function 'filter_map' has only been included since OCaml 4.11, so if you build this exact package against 4.10 it would not contain that value.
+						Obviously the standard library is not unique in this, so it's entirely possible for the interface of a package to change if you change the version of any of its dependencies.
 						
 						Consequently in order for the cross-referencing to be exact and correct, we need to identify a particular set of docs for a package not just by the package name and version,
 						but by the triple of 'package name', 'package version' and 'universe id', the last of which we define as a hash dependent on the package's versioned dependencies.
@@ -128,7 +129,7 @@ module M : Stdlib.Set.S with type t = mytype
 
 						Consequently, for some packages, we necessarily need to produce documentation for the same version for each different
 						universe in which it is needed. Since these may be different, we need to ensure these are put in different paths. The
-						most obvious way to do this is to use the universe id as part of the path.
+						most obvious way to do this is to use the universe id as part of the path, so something like /packages/universe id/package name/package version
 
 					</aside>
 				</section>
@@ -185,8 +186,7 @@ module M : Stdlib.Set.S with type t = mytype
 						Ocurrent encouranges incremental builds so that even
 						when the build graph changes -- for example, when a new package or version is 
 						committed into opam-repository -- it only rebuilds the new artefacts required. It
-						does this by defining a key/value pair for each step in the build process, and
-						some additionally keep some local state too. It then memoizes the results, so
+						does this by defining a key/value pair for each step in the build process. It then memoizes the results, so
 						if it has already calculated the value
 						associated with the key or keys, it just returns the previously calculated result.
 
@@ -206,13 +206,13 @@ module M : Stdlib.Set.S with type t = mytype
 							The inputs -- the 'key' -- is the commit hash of opam-repository, and the list of the packages we're interested in,
 							and the resulting value is the list of solutions.
 
-							We keep 'state' around -- the list of previously solved packages -- so that when a the input changes, which is most often a new commit on opam-repository,
+							We keep some additional 'state' -- the list of previously solved packages -- so that when a the input changes, which is most often a new commit on opam-repository,
 							we can decide whether our previous solutions are still valid.
 
 							Right now, if we have a cached version we'll always reuse it, but we'll likely adjust this in the future. There are a variety of
 							circumstances under which we'll want to re-solve -- For example, we'll almost certainly
-							want to re-solve for everything using the latest version of the compiler when a new compiler is released. Possibly we'll also want
-							to re-solve on a regular cadence just to ensure our solutions are reasonably up-to-date.
+							want to re-solve for everything when a new compiler is released, as in many cases the solutions will change to use this newly released compiler. Possibly we'll also want
+							to re-solve just on a regular cadence to ensure our solutions are reasonably up-to-date.
 
 							We do not insist on installing the optional dependencies where they exist, as it's perfectly possible for optional dependencies to
 							be mutually exclusive, or for some broken packages for the optional dependencies to cause the build to fail. To some extent we do
@@ -238,12 +238,12 @@ module M : Stdlib.Set.S with type t = mytype
 							base docker image to use with an appropriate compiler version, then invokes opam to install
 							the packages.
 
-							It the runs the tool `voodoo-prep` to find the files within the opam folder that are necessary 
+							It then runs the tool `voodoo-prep` to find the files within the opam folder that are necessary 
 							to produce the docs. Mostly this is the cmti, cmt and cmi files that odoc requires, but we
 							also pull out a few more files -- any package docs installed, dune-package files for a bit of
 							metadata, and some info from the 'cma' files if dune-package doesn't exist.
 
-							These files are then tarred up and pushed to an external filesystem, and the hash calculated.
+							These files are then tarred up and pushed to the external filesystem, and the hash calculated.
 							This hash is the 'value' of this part of the pipeline.
 
 							When we've got the complete builds we can choose which universe to be blessed. We do this by picking
@@ -288,7 +288,7 @@ module M : Stdlib.Set.S with type t = mytype
 							the desired output changes - to rerun this step over all universes only talks about
 							90 minutes. We have a slightly altered HTML generation step than odoc usually has, which
 							has allowed the integration of the docs into other
-							sites easily, in particular, v3.ocaml.org. This HTML generation tool is currently
+							sites easily, in particular of course, v3.ocaml.org. This HTML generation tool is currently
 							being prototyped in the `voodoo` suite of tools, but it's likely we'll fold it back into
 							odoc once we decide on the most useful output format.
 						</aside>
@@ -308,7 +308,7 @@ module M : Stdlib.Set.S with type t = mytype
 							this could be done simply by inserting the new set of HTML files into the appropriate
 							place in the 'unioned' filesystem.
 
-							A breaking change is anything that might cause links to break and/or change, or the
+							A breaking change is anything that might cause links to break, or the
 							downstream consumers to break. For example, if we changed the layout of the metadata
 							consumed by the v3.ocaml.org server, we might wish to do that atomically across all
 							packages rather than just incrementally. For these sorts of changes we have what we
