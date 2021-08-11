@@ -25,12 +25,12 @@
 						Hello. My name is Jon Ludlam, and I'll be giving our talk entitled
 						"A Multiverse of Glorious Documentation". Those of you that were here
 						last year may remember I gave a talk about `odoc` entitled 'The Final
-						Piece of the Documentation Puzzle'. Now, the astute amongst you might notice
-						I'm back with more documentation work so you might thing perhaps last's year's title
+						Piece of the Documentation Puzzle'. Now, you might notice
+						I'm back with more documentation work so you might reasonably think perhaps last's year's title
 						was a little premature. The difference this year however, is that I want to expand our scope.
 						We weren't ambitious enough last year -- I looked only at documenting a single library. This year I want
 						to document every single library I've ever seen, and all the libraries that I've never
-						seen too. And I'm going to tell you how to combine all those library documents
+						seen too, and even every version of all of these libraries. And I'm going to tell you how to combine all those library documents
 						into not just a glorious universe of documents, but an entire multiverse! Let's go!
 					</aside>
 				</section>
@@ -43,7 +43,7 @@
 						<li>Provide a solid basis for further innovation, e.g. links to/from source, type-aware search, etc.</li>
 					</ul>
 					<aside class="notes">
-						Let's start with the goals. We're looking at the opam repository, and wanting to
+						We'll start with the goals. We're looking at the opam repository, and wanting to
 						produce documentation for each of the versions of each of the packages in there.
 						That amounts to about 17,400 version as of today - a lot of packages to be sure, but not insurmountable.
 						An fact, we actually end up document a bit more than that, and I'll discuss the reasons why this is the case in a bit.
@@ -52,7 +52,7 @@
 					    it get on with things and not worry about it - I don't particular want to schedule
 						a weekly 'update the docs' slot into my Monday mornings. Even better, let's have it
 						such that any time a new package or version is merged into opam-repository.git
-						we'll build docs for that. While we're making up goals let's have it happy quickly,
+						we'll build docs for that. While we're making up goals let's have it happen quickly,
 						let's aim for 10 minutes and see how we do. And if the server we're running it on
 						shuffles off to a better place, we need to be able to start it all up again without
 						too many tears.
@@ -71,11 +71,11 @@
 						<li>Odoc 2.0 supports this</li>
 					</ul>
 					<aside class="notes">
-						No surprises given it's me talking -- we're going to use odoc. It's the only tool in
+						No surprises here given my talk last year -- we're going to use odoc. It's the only tool in
 						the game really. The trouble is that the way odoc works is that it requires a consistent
 						set of packages that are all co-installable; or more accurately co-typable. To understand
 						why see my talk from last year. So that rules out having more than one version of a package
-						... mostly.
+						... in most cases at least.
 
 						What we're going to do then, is build the documents separately into some carefully defined
 						file tree, then 'union' them together into one set of docs.
@@ -83,7 +83,7 @@
 						Happily, Odoc 2.0 supports rendering HTML into an arbitrary file structure, so we're good
 						to go.
 
-						Next decision: File layout
+						Our next decision is therefore: exactly what file layout will we use?
 					</aside>
 				</section>
 
@@ -98,7 +98,7 @@ module M : Stdlib.Set.S with type t = mytype
 					</ul>
 					<aside class="notes">
 						The most obvious answer is just to stick the HTML docs into a file structure based on the package name and version.
-						Should be sufficient right? Wrong!
+						Should be sufficient right? Sadly this is not the case.
 						
 						The fact is that the interface exposed by a package is dependent not only on the package itself, but on the _exact versions_ of its dependencies.
 						
@@ -115,17 +115,252 @@ module M : Stdlib.Set.S with type t = mytype
 					<ul>
 					<li>Can we get away with a single universe per package?</li>
 					<li>No! Example: `findlib`</li>
+					<li>So put the universe id in the path<pre><code class="language-shell">/packages/&lt;universe id&gt;/&lt;package name&gt;/&lt;package version&gt;/</code></pre></li>
+
 					</ul>
 					<aside class="notes">
 
 						Next question: Can we get away with only ever compiling each version of each package against one set of dependencies?
-						It would be convenient, but this turns out not to be the case. Take the example of `findlib` - virtually all packages depend upon findlib, and with no constraint, meaning opam will pick the latest compatible version. However, many packages have constraints on the version of OCaml, so we end up compiling the latest version of `findlib` against many different versions of the compiler.
+						It would be convenient, but this turns out not to be possible. Take the example of `findlib` - virtually all packages
+						depend upon findlib, and with no constraint, meaning opam will pick the latest compatible version. However, many packages
+						have constraints on the version of OCaml, so we end up compiling the latest version of `findlib` against many different
+						versions of the compiler.
 
-Consequently, for some packages, we necessarily need to produce documentation for the same version for each different universe in which it is needed.
+						Consequently, for some packages, we necessarily need to produce documentation for the same version for each different
+						universe in which it is needed. Since these may be different, we need to ensure these are put in different paths. The
+						most obvious way to do this is to use the universe id as part of the path.
 
 					</aside>
 				</section>
 
+				<section>
+					<h3>"Blessed" packages</h3>
+					<ul>
+					<li>These URLs are awful!</li>
+					<li>Pick one universe amongst the many to be the 'standard' one, with a reasonable URL</li>
+					<li>
+						<pre><code>
+/p/<i>package name</i>/<i>package version</i>/
+/u/<i>universe id 1</i>/<i>package name</i>/<i>package version</i>/
+/u/<i>universe id 2</i>/<i>package name</i>/<i>package version</i>/
+						</code></pre>
+					</ul>
+					<li>these chosen universes are called 'blessed' universes</li>
+					<aside class="notes">
+
+					While this scheme is correct, it doesn't lead to particularly discoverable, pleasant or easy-to-remember URLs.
+
+					To fix this, what we do is pick one particular universe to be the 'representative' for each version of each
+					package. I'll describe later the exact mechanism we use for this at the moment, but the important thing is that
+					this gives us a way to have a nice discoverable and easy-to-use URL for each package version, while retaining
+					the 'correctness' that every link can be guaranteed to go to the destination that the package was actually
+					compiled against.
+
+					We call the chosen representative universe the 'blessed' universe.
+					</aside>
+				</section>
+
+				
+
+				<section>
+					<h3>Incremental Pipeline for Fast Builds</h3>
+					<img src="pipeline.png" />
+					<ul>
+						<li>Track the opam repository</li>
+						<li>Solve for each package version</li>
+						<li>Install each resolution and extract the installed files</li>
+						<li>Compile the documentation for each package and extract the compiled files</li>
+						<li>Generate the HTML files from the compiled files</li>
+						</ul>
+						<aside class="notes">
+						We use ocurrent to build an incremental pipeline to build the docs. This is the
+						same system that's being used for CI systems such as ocaml-ci - it's designed to
+						watch git repositories for updates, and responding by submitting jobs to a cluster
+						for execution. It's got some really nice caching built in that works really well,
+						though not quite capable enough today to match our needs, so
+						we have built more of a stateful pipeline. Not only that, but since the artefacts
+						we work with are large we store them on an external filesystem, and that in itself
+						is a stateful part - so we have two states to keep in sync.
+
+						Ocurrent encouranges incremental builds so that even
+						when the build graph changes -- for example, when a new package or version is 
+						committed into opam-repository -- it only rebuilds the new artefacts required. It
+						does this by defining a key/value pair for each step in the build process, and
+						some additionally keep some local state too. It then memoizes the results, so
+						if it has already calculated the value
+						associated with the key or keys, it just returns the previously calculated result.
+
+						Let's take a look in more detail at some of these individual parts.
+						</aside>
+				</section>
+
+				<section>
+					<h3>Incremental Solver</h3>
+					<ul>
+						<li><strong>Key:</strong> opam repository commit id, list of tracked packages</li>
+						<li><strong>State:</strong> currently known resolutions</li>
+						<li><strong>value:</strong> resolutions for tracked packages</li>
+					</ul>
+						<aside class="notes">
+							The solver's job is, for each package/version we are tracking, to run an opam solver to find the precise set of packages required to install it.
+							The inputs -- the 'key' -- is the commit hash of opam-repository, and the list of the packages we're interested in,
+							and the resulting value is the list of solutions.
+
+							We keep 'state' around -- the list of previously solved packages -- so that when a the input changes, which is most often a new commit on opam-repository,
+							we can decide whether our previous solutions are still valid.
+
+							Right now, if we have a cached version we'll always reuse it, but we'll likely adjust this in the future. There are a variety of
+							circumstances under which we'll want to re-solve -- For example, we'll almost certainly
+							want to re-solve for everything using the latest version of the compiler when a new compiler is released. Possibly we'll also want
+							to re-solve on a regular cadence just to ensure our solutions are reasonably up-to-date.
+
+							We do not insist on installing the optional dependencies where they exist, as it's perfectly possible for optional dependencies to
+							be mutually exclusive, or for some broken packages for the optional dependencies to cause the build to fail. To some extent we do
+							make up for this in the blessing step.
+						</aside>
+				</section>
+
+				<section>
+					<h3>Preparation/Blessing</h3>
+					<ul>
+						<li><strong>Key:</strong> a resolution to install, the opam-repository commit id, and the commit of 'voodoo'</li>
+						<li><strong>State:</strong> external filesystem with the results of 'voodoo-prep'</li>
+						<li><strong>value:</strong> hash of the results of 'voodoo-prep'</li>
+					</ul>
+					<p>When builds complete we choose the blessed universe:</p>
+					<ul>
+						<li>Most dependencies - including optional dependencies</li>
+						<li>tie breaker: most reverse dependencies</li>
+					</ul>
+					
+						<aside class="notes">
+							Once we've got a solution the next step is to install it. The pipeline takes care of choosing a
+							base docker image to use with an appropriate compiler version, then invokes opam to install
+							the packages.
+
+							It the runs the tool `voodoo-prep` to find the files within the opam folder that are necessary 
+							to produce the docs. Mostly this is the cmti, cmt and cmi files that odoc requires, but we
+							also pull out a few more files -- any package docs installed, dune-package files for a bit of
+							metadata, and some info from the 'cma' files if dune-package doesn't exist.
+
+							These files are then tarred up and pushed to an external filesystem, and the hash calculated.
+							This hash is the 'value' of this part of the pipeline.
+
+							When we've got the complete builds we can choose which universe to be blessed. We do this by picking
+							a universe with the most dependencies. Doing this means that when we've got a successful build with
+							some of a packages optional dependencies, which occurs when a dependent package has a non-optional
+							dependency, then the blessed universe will have the docs for the packages optional libraries.
+
+							When a tie breaker is needed we simply count the number of dependent universes, and choose the universe
+							that's included in more of our other universes.
+
+						</aside>
+				</section>
+
+				<section>
+					<h3>"Compilation"</h3>
+					<ul>
+						<li><strong>Key:</strong> 'Preparation' step hash for the package, 'Compilation' step hash for the package's dependencies, voodoo-do and opam commit ids.
+</li>
+						<li><strong>State:</strong> external filesystem with the results of 'voodoo-do'</li>
+						<li><strong>value:</strong> hash of the output</li>
+					</ul>
+						<aside class="notes">
+							Once we have the artefacts extracted from the opam directory, the next step is perform the odoc 'compile' and
+							'link' steps. These are roughly analogous to the usual compile and link steps; to compile the docs we
+							require the results of compiling all of the dependencies, hence this forms part of the 'key' of this step.
+							Furthermore this is the first step in which odoc is required, and since we are using an unreleased version
+							of odoc we track the commit id here too. For more details on this step, see last year's talk.
+
+							The result of this is the 'linked' version of the docs that can then be converted to a variety of output formats.
+						</aside>
+				</section>
+
+				<section>
+					<h3>HTML generation</h3>
+					<ul>
+						<li><strong>Key:</strong> Artifacts hash of the package's linked output</li>				  
+						<li><strong>State:</strong> external filesystem with the results of 'voodoo-gen'</li>
+						<li><strong>value:</strong> hash of the HTML files</li>
+					</ul>
+						<aside class="notes">
+							The separation of this step is done largely to ensure we can rerun this quickly as
+							the desired output changes - to rerun this step over all universes only talks about
+							90 minutes. We have a slightly altered HTML generation step than odoc usually has, which
+							has allowed the integration of the docs into other
+							sites easily, in particular, v3.ocaml.org. This HTML generation tool is currently
+							being prototyped in the `voodoo` suite of tools, but it's likely we'll fold it back into
+							odoc once we decide on the most useful output format.
+						</aside>
+				</section>
+
+				<section>
+					<h3>Atomic updates</h3>
+					<ul>
+						<li>Distinguish between breaking and non-breaking changes</li>
+						<li>Non-breaking changes (e.g. new package added) can be done non-atomically</li>
+						<li>Breaking changes need atomic updates - via symlink on server</li>
+					</ul>
+						<aside class="notes">
+							As with all 'live' systems we need to have a policy on how updates are handled. In
+							general the updates are either breaking changes or non-breaking changes. As an 
+							example of a non-breaking change we might have a new package put into opam-repository -
+							this could be done simply by inserting the new set of HTML files into the appropriate
+							place in the 'unioned' filesystem.
+
+							A breaking change is anything that might cause links to break and/or change, or the
+							downstream consumers to break. For example, if we changed the layout of the metadata
+							consumed by the v3.ocaml.org server, we might wish to do that atomically across all
+							packages rather than just incrementally. For these sorts of changes we have what we
+							call an 'epoch' symlink on the server. When the build has completely finished, we can 
+							simply flip the symlink and we atomically switch from one set of metadata to the
+							new set.
+						</aside>
+				</section>
+
+				<section>
+					<h3>Stats</h3>
+					<ul>
+						<li>50G of HTML files</li>
+<li>3300 packages, totalling 17400 versions (~2K opam installation failures)</li>
+<li>18600 versions living in parallel universes</li>
+<li>3.3M documentation pages</li>
+<li>Package having the largest number of parallel universes: logs.0.7.0 (209 universes)</li>
+<li>6 hours build on the ocamllabs cluster</li>
+					</ul>
+				</section>
+				<section>
+					<h3>Further work</h3>
+					<ul>
+						<li>Optimizing job duration and data movement</li>
+						<li>Towards a formalisation of data pipelines ?</li>
+						<li>Public APIs to access the CI output and build new frontends</li>
+						<li>VSCode integration</li>
+						<li>Search</li>
+						<li>Comparison/coalescing of different universes</li>
+						<li>Diffs between versions</li>
+					</ul>
+						<aside class="notes">
+We have plenty of work left to do! As I mentioned before we've set up the pipeline to store its artefacts externally, and this is done in a fairly
+naive way, and there are plenty of opportunities to improve this. Additionally or alternatively we might invest in embedding the idea of a data
+pipeline more directly in ocurrent.
+
+We've already got a public API of sorts in place whereby the documentation generated by the pipeline can be consumbed by the v3.ocaml.org server
+and rendered nicely as part of the new OCaml website. It would be interesting to think more about other uses of this; for example we might embed
+the output in the visual studio code plugin in some form, or we might be able to use the data we're generating in alternate ways; for example
+some form of search. 
+
+We've not done a lot yet on comparing the documentation in different universes. While it's certainly theoretically different, it would be useful
+and informative to understand how different it can be in practice.
+
+While we're considering comparing the output, it would also be really useful to be able to show the diffs between different versions of a package,
+although since they may be compiled against different dependencies we'd need to carefully consider what the source of the differences is.
+
+In short, there remains much work to be done!
+
+
+						</aside>
+				</section>
 
 
 			</div>
